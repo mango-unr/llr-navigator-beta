@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LLR Support Navigator · Beta</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: #F8F9FA; }
+    input, select, button, textarea { font-family: inherit; }
+    select { appearance: auto; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+// ── Config ────────────────────────────────────────────────────────────────────
+// Replace this with your Firebase Function URL after deployment
+const FIREBASE_FUNCTION_URL = "REPLACE_WITH_FIREBASE_FUNCTION_URL";
+// Replace this with your chosen secret token (must match what's in your Firebase Function)
+const PROXY_SECRET = "REPLACE_WITH_SECRET_TOKEN";
+
+// ── Brand ────────────────────────────────────────────────────────────────────
+const B = {
+  green:      "#3AB87A",
+  greenDark:  "#2A7A52",
+  greenLight: "#F0FAF4",
+  greenMid:   "#C8F0D0",
+  amber:      "#F4A830",
+  amberLight: "#FEF3DC",
+  white:      "#FFFFFF",
+  grey50:     "#F8F9FA",
+  grey100:    "#F1F3F5",
+  grey200:    "#E9ECEF",
+  grey400:    "#ADB5BD",
+  grey600:    "#6C757D",
+  grey800:    "#343A40",
+  red:        "#E53E3E",
+  redLight:   "#FFF5F5",
+  blue:       "#3182CE",
+  blueLight:  "#EBF8FF",
+  purple:     "#805AD5",
+  purpleLight:"#FAF5FF",
+};
+
+// ── localStorage helpers (replaces window.storage) ───────────────────────────
+const storage = {
+  get: (key) => {
+    try {
+      const val = localStorage.getItem(key);
+      return val ? { value: val } : null;
+    } catch { return null; }
+  },
+  set: (key, value) => {
+    try { localStorage.setItem(key, value); return true; } catch { return false; }
+  }
+};
+
+// ── Resources ────────────────────────────────────────────────────────────────
+const INITIAL_LLR = [
+  { id:1, name:"LLR Mind", category:"Mental Health", area:"Leicester City", conditions:["Anxiety","Depression","Stress","Low mood"], services:["Counselling","Talking therapies","Wellbeing support groups"], ageGroups:["Young people (11–17)","Adults (18+)"], referral:"Self-referral", phone:"0116 222 0430", email:"info@llrmind.org", website:"https://www.llrmind.org", desc:"Emotional support, counselling, and wellbeing services for young people and adults across LLR.", lastVerified:"2025-05-01" },
+  { id:2, name:"Adhar Project", category:"Community Support", area:"Leicester City", conditions:["Anxiety","Depression","Cultural isolation","Trauma / PTSD"], services:["Culturally sensitive counselling","Community support","Peer groups"], ageGroups:["Young people (11–17)","Adults (18+)"], referral:"Self-referral", phone:"0116 261 0015", email:"", website:"https://www.adharproject.org", desc:"Culturally sensitive mental health and wellbeing support for South Asian communities.", lastVerified:"2025-05-01" },
+  { id:3, name:"LCC Family Hubs – Hinckley", category:"Family Support", area:"Hinckley", conditions:["Family stress","Parenting difficulties","Early help needs"], services:["Parenting programmes","Early help","Family support workers"], ageGroups:["Children (0–10)","Families"], referral:"Self-referral", phone:"01455 559 069", email:"", website:"https://www.leicestershire.gov.uk/education-and-children/family-hubs", desc:"Community-based support for families with children from birth to age 9.", lastVerified:"2025-05-01" },
+  { id:4, name:"LCC Family Hubs – Charnwood", category:"Family Support", area:"Charnwood", conditions:["Family stress","Parenting difficulties","Early help needs"], services:["Parenting programmes","Early help","Family support workers"], ageGroups:["Children (0–10)","Families"], referral:"Self-referral", phone:"01509 265 800", email:"", website:"https://www.leicestershire.gov.uk/education-and-children/family-hubs", desc:"Community-based support for families with children from birth to age 9 in Charnwood.", lastVerified:"2025-05-01" },
+  { id:5, name:"CAMHS – Tier 2 (LCRFT)", category:"Clinical Services", area:"LLR-wide", conditions:["Anxiety","Depression","Eating disorders","Self-harm","Trauma / PTSD","OCD"], services:["Assessment","Talking therapies","Family therapy","Early intervention"], ageGroups:["Children (0–10)","Young people (11–17)"], referral:"Professional referral", phone:"0116 295 0900", email:"", website:"https://www.leicspart.nhs.uk/service/child-and-adolescent-mental-health-services-camhs/", desc:"NHS-funded early intervention mental health support for children and young people up to 18.", lastVerified:"2025-05-01" },
+  { id:6, name:"Leicestershire Recovery College", category:"Education & Wellbeing", area:"Leicestershire", conditions:["Depression","Anxiety","Recovery from mental illness"], services:["Educational workshops","Peer support courses","Wellbeing programmes"], ageGroups:["Adults (18+)"], referral:"Self-referral", phone:"0116 295 0950", email:"", website:"https://www.leicspart.nhs.uk/service/leicestershire-recovery-college/", desc:"Free wellbeing-focused educational courses for people affected by mental health challenges.", lastVerified:"2025-05-01" },
+  { id:7, name:"Shape Your Future (SEND Support)", category:"SEND", area:"LLR-wide", conditions:["SEND-related anxiety","Neurodiversity","Learning difficulties"], services:["Information & advice","EHC plan support","Family navigation"], ageGroups:["Children (0–10)","Young people (11–17)","Families"], referral:"Self-referral", phone:"0116 305 5614", email:"", website:"https://www.leicestershire.gov.uk/education-and-children/special-educational-needs-and-disability", desc:"Information, advice and support for families of children with SEND, helping navigate EHC plans.", lastVerified:"2025-05-01" },
+  { id:8, name:"Kooth Online Wellbeing", category:"Digital Support", area:"LLR-wide", conditions:["Anxiety","Depression","Low mood","Loneliness","Stress"], services:["Online counselling","Peer forums","Self-guided wellbeing tools"], ageGroups:["Young people (11–17)","Young adults (18–25)"], referral:"Self-referral", phone:null, email:"", website:"https://www.kooth.com", desc:"Free, safe, and anonymous online mental health support for young people aged 11–25. No referral needed.", lastVerified:"2025-05-01" },
+  { id:9, name:"Childline", category:"Crisis & Safety", area:"National", conditions:["Crisis","Abuse","Suicide ideation","Self-harm","Bullying"], services:["24/7 helpline","Online chat","Email support"], ageGroups:["Children (0–10)","Young people (11–17)"], referral:"Self-referral", phone:"0800 1111", email:"", website:"https://www.childline.org.uk", desc:"Free, confidential support for children and young people under 19 on any issue, available 24/7.", lastVerified:"2025-05-01" },
+  { id:10, name:"Place2Be (Schools)", category:"School-based", area:"LLR Schools", conditions:["Anxiety","Behavioural difficulties","Bereavement","Family breakdown"], services:["In-school counselling","Group work","Parent support"], ageGroups:["Children (0–10)","Young people (11–17)"], referral:"Professional referral", phone:"020 7923 5500", email:"", website:"https://www.place2be.org.uk", desc:"In-school mental health and counselling support for children and young people.", lastVerified:"2025-05-01" },
+  { id:11, name:"Youth in Mind (Rutland)", category:"Mental Health", area:"Rutland", conditions:["Anxiety","Depression","Low mood","Social isolation"], services:["Wellbeing support","Schools outreach","Early intervention"], ageGroups:["Young people (11–17)"], referral:"Self-referral", phone:"01572 722 722", email:"", website:"https://www.rutland.gov.uk", desc:"Wellbeing support and early intervention for young people in Rutland, including schools outreach.", lastVerified:"2025-05-01" },
+  { id:12, name:"New Parks House SEND Hub", category:"SEND", area:"Leicester City", conditions:["SEND-related anxiety","Neurodiversity","Inclusion needs"], services:["EHC assessments","Inclusion advice","SENDCO support"], ageGroups:["Children (0–10)","Young people (11–17)"], referral:"Professional referral", phone:"0116 454 1009", email:"", website:"https://www.leicester.gov.uk/education-and-learning/special-educational-needs-and-disability/", desc:"Local hub for SEND support, EHC assessments, and inclusion advice for schools and families in Leicester city.", lastVerified:"2025-05-01" },
+  { id:13, name:"VitaMinds (LLR Talking Therapies)", category:"Mental Health", area:"LLR-wide", conditions:["Anxiety","Depression","Stress","Low mood","OCD","Trauma / PTSD"], services:["Talking therapies","CBT","Group therapy","Online sessions"], ageGroups:["Young adults (18–25)","Adults (18+)"], referral:"Self-referral", phone:"0330 094 5595", email:"", website:"https://www.vitahealthgroup.co.uk/nhs-services/nhs-mental-health/leicester-leicestershire-rutland/", desc:"Free NHS talking therapy service for anyone 16+ registered with a GP in LLR. No GP referral needed.", lastVerified:"2025-05-01" },
+  { id:14, name:"Mental Health Central Access Point (CAP)", category:"Crisis & Safety", area:"LLR-wide", conditions:["Anxiety","Depression","Crisis","Suicide ideation","Self-harm"], services:["24/7 crisis helpline","Urgent support","Signposting","Referral"], ageGroups:["All ages"], referral:"Self-referral", phone:"0808 800 3302", email:"", website:"https://www.leicspart.nhs.uk", desc:"Free 24/7 helpline for people of all ages in LLR needing urgent mental health support or referral.", lastVerified:"2025-05-01" },
+  { id:15, name:"Harmless", category:"Crisis & Safety", area:"LLR-wide", conditions:["Self-harm","Suicide ideation"], services:["One-to-one therapy","Group work","Drop-in sessions","Carer and family support"], ageGroups:["All ages"], referral:"Self-referral", phone:"0115 8800 280", email:"leicester@harmless.org.uk", website:"https://www.harmless.org.uk", desc:"LLR-wide community service for people affected by self-harm and suicide. Supports all ages including carers.", lastVerified:"2025-05-01" },
+  { id:16, name:"The Tomorrow Project", category:"Crisis & Safety", area:"LLR-wide", conditions:["Bereavement","Suicide ideation"], services:["One-to-one face-to-face support","Suicide bereavement support"], ageGroups:["All ages"], referral:"Self-referral", phone:"0115 8800 280", email:"leicester@harmless.org.uk", website:"https://www.harmless.org.uk/what-we-do/the-tomorrow-project/", desc:"Delivered by Harmless, supporting anyone bereaved by suicide in LLR with one-to-one emotional and practical support.", lastVerified:"2025-05-01" },
+  { id:17, name:"LAMP – Leicestershire Action for Mental Health", category:"Community Support", area:"LLR-wide", conditions:["Anxiety","Depression","Stress","Low mood"], services:["Independent advocacy","Peer advocacy","Carer support groups","Navigation support"], ageGroups:["Young adults (18–25)","Adults (18+)"], referral:"Self-referral", phone:"0116 255 6286", email:"info@lampdirect.org.uk", website:"https://www.lampadvocacy.co.uk", desc:"Free independent mental health advocacy charity helping people in LLR navigate mental health services.", lastVerified:"2025-05-01" },
+  { id:18, name:"CAMHS Eating Disorders Team (EDT)", category:"Clinical Services", area:"LLR-wide", conditions:["Eating disorders"], services:["Specialist assessment","Family therapy","CBT","Dietitian support"], ageGroups:["Children (0–10)","Young people (11–17)"], referral:"Professional referral", phone:"0116 295 0900", email:"", website:"https://www.leicspart.nhs.uk/service/child-and-adolescent-mental-health-services-camhs/", desc:"NHS specialist eating disorder service for young people aged 0–18. Referral via GP, school nurse or CAMHS.", lastVerified:"2025-05-01" },
+  { id:19, name:"First Steps Eating Disorders", category:"Mental Health", area:"LLR-wide", conditions:["Eating disorders"], services:["One-to-one counselling","Group therapy","Guided self-help","Parent/carer support"], ageGroups:["Children (0–10)","Young people (11–17)","Young adults (18–25)","Adults (18+)","Families"], referral:"Self-referral", phone:"0300 102 1685", email:"info@firststepsed.co.uk", website:"https://www.firststepsed.co.uk", desc:"Midlands eating disorder charity providing individual and group therapy for ages 5+. Accessible in LLR schools.", lastVerified:"2025-05-01" },
+  { id:20, name:"Teen Health 11–19 Service", category:"School-based", area:"Leicestershire", conditions:["Anxiety","Depression","Stress","Substance misuse"], services:["Mental health support","Healthy relationship guidance","Substance misuse support","School outreach"], ageGroups:["Young people (11–17)"], referral:"Both", phone:"", email:"", website:"https://www.leicestershire.gov.uk/education-and-children/health-for-young-people", desc:"Replaced school nursing in Leicestershire for 11–19 year olds. Supports mental health, relationships and substance misuse.", lastVerified:"2025-05-01" },
+  { id:21, name:"Tellmi", category:"Digital Support", area:"LLR-wide", conditions:["Anxiety","Depression","Low mood","Loneliness","Stress","Self-harm"], services:["Anonymous peer support","Counsellor support (8:30–11pm)","Crisis intervention"], ageGroups:["Young people (11–17)","Young adults (18–25)","Adults (18+)"], referral:"Self-referral", phone:"", email:"", website:"https://www.tellmi.help", desc:"Free, ICB-commissioned digital mental health app for anyone 11+ in LLR. Anonymous peer support with in-house counsellors.", lastVerified:"2025-05-01" },
+  { id:22, name:"Neighbourhood Mental Health Cafés", category:"Community Support", area:"LLR-wide", conditions:["Anxiety","Depression","Crisis","Low mood","Stress"], services:["Drop-in support","Listening support","Signposting"], ageGroups:["Young adults (18–25)","Adults (18+)"], referral:"Self-referral", phone:"0116 295 0900", email:"", website:"https://www.leicspart.nhs.uk/service/neighbourhood-mh-cafes/", desc:"Drop-in mental health cafés across LLR. No appointment needed. Trained staff provide immediate listening support.", lastVerified:"2025-05-01" },
+  { id:23, name:"CYP Mental Health Triage & Navigation", category:"Clinical Services", area:"LLR-wide", conditions:["Anxiety","Depression","Low mood","Self-harm","Behavioural difficulties"], services:["Triage","Navigation to appropriate services","Signposting"], ageGroups:["Children (0–10)","Young people (11–17)"], referral:"Both", phone:"", email:"", website:"https://www.myselfreferral-llr.nhs.uk", desc:"NHS service helping children and young people in LLR access the right non-urgent mental health service.", lastVerified:"2025-05-01" },
+  { id:24, name:"Shout (Crisis Text Line)", category:"Crisis & Safety", area:"National", conditions:["Crisis","Suicide ideation","Self-harm","Anxiety","Abuse"], services:["24/7 crisis text support"], ageGroups:["All ages"], referral:"Self-referral", phone:"Text 85258", email:"", website:"https://www.giveusashout.org", desc:"UK's first free 24/7 crisis text service. Text 85258 for immediate help with suicidal thoughts, self-harm or any crisis.", lastVerified:"2025-05-01" },
+  { id:25, name:"The Mix", category:"Digital Support", area:"National", conditions:["Anxiety","Depression","Suicide ideation","Self-harm","Substance misuse","Loneliness"], services:["Phone helpline","Online one-to-one chat","Crisis text support"], ageGroups:["Young people (11–17)","Young adults (18–25)"], referral:"Self-referral", phone:"0808 808 4994", email:"", website:"https://www.themix.org.uk", desc:"Leading support service for under-25s. Phone and online chat 4–11pm daily. Crisis text: THEMIX to 85258.", lastVerified:"2025-05-01" },
+  { id:26, name:"Papyrus HOPELINEUK", category:"Crisis & Safety", area:"National", conditions:["Suicide ideation"], services:["Confidential helpline","Text support","Email support"], ageGroups:["Young people (11–17)","Young adults (18–25)"], referral:"Self-referral", phone:"0800 068 4141", email:"pat@papyrus-uk.org", website:"https://www.papyrus-uk.org", desc:"Confidential support for young people under 35 with suicidal thoughts. Available 9am–midnight daily.", lastVerified:"2025-05-01" },
+  { id:27, name:"Heads Up Leicester", category:"Mental Health", area:"Leicester City", conditions:["Anxiety","Depression","Behavioural difficulties","Low mood"], services:["Counselling","Group programmes","Parent/carer support"], ageGroups:["Young people (11–17)","Families"], referral:"Self-referral", phone:"0116 223 4254", email:"", website:"https://www.headsupleicester.org.uk", desc:"Locally commissioned service supporting parents/carers and young people over 8 with challenging behaviour, conflict and mental health.", lastVerified:"2025-05-01" },
+  { id:28, name:"Early Intervention Service (Relationships Centre)", category:"Mental Health", area:"LLR-wide", conditions:["Anxiety","Depression","Low mood","Behavioural difficulties","Family breakdown"], services:["Counselling","Group work","Parent/carer support"], ageGroups:["Children (0–10)","Young people (11–17)","Families"], referral:"Self-referral", phone:"", email:"", website:"https://www.relationshipscentreleicestershire.org.uk/content/index.php?a=the-early-intervention-service", desc:"ICB-commissioned service providing emotional wellbeing and therapeutic support for children and young people aged 5–18 with low to moderate mental health needs.", lastVerified:"2025-05-01" },
+  { id:29, name:"The Laura Centre", category:"Mental Health", area:"Leicester City", conditions:["Bereavement"], services:["Bereavement counselling","Family support","Individual therapy"], ageGroups:["Children (0–10)","Young people (11–17)","Adults (18+)","Families"], referral:"Self-referral", phone:"0116 254 4341", email:"", website:"https://www.thelauracentre.org.uk", desc:"Professional bereavement service providing a safe and inclusive environment for all the family.", lastVerified:"2025-05-01" },
+  { id:30, name:"Winston's Wish", category:"Mental Health", area:"National", conditions:["Bereavement"], services:["Emotional support","Practical bereavement support","Online resources","Professional training"], ageGroups:["Children (0–10)","Young people (11–17)","Families"], referral:"Self-referral", phone:"08088 020 021", email:"ask@winstonswish.org", website:"https://www.winstonswish.org", desc:"Provides emotional and practical bereavement support to children, young people and carers. Specialist child bereavement charity.", lastVerified:"2025-05-01" },
+  { id:31, name:"FREEVA Young Peoples Project", category:"Community Support", area:"Leicester City", conditions:["Behavioural difficulties","Anxiety","Abuse"], services:["One-to-one support","Healthy relationships guidance","Emotional regulation"], ageGroups:["Young people (11–17)"], referral:"Self-referral", phone:"0116 254 0101", email:"", website:"https://www.freeva.org.uk/the-young-person-project/", desc:"Impartial, non-judgmental support for ages 10–18 covering harmful behaviours, healthy relationships, managing emotions and conflict.", lastVerified:"2025-05-01" },
+  { id:32, name:"Turning Point – Young People's Drug & Alcohol Service", category:"Community Support", area:"Leicester City", conditions:["Substance misuse"], services:["One-to-one support","Community outreach","Recovery planning"], ageGroups:["Young people (11–17)","Young adults (18–25)"], referral:"Self-referral", phone:"0330 303 6000", email:"", website:"https://www.turning-point.co.uk/services/leicestershire", desc:"For anyone under 25 in Leicestershire, providing one-to-one support and help to gain control of substance use.", lastVerified:"2025-05-01" },
+  { id:33, name:"Living Without Abuse (LWA)", category:"Crisis & Safety", area:"LLR-wide", conditions:["Abuse","Trauma / PTSD"], services:["Crisis support","Counselling","Safety planning","Children's services"], ageGroups:["Young people (11–17)","Adults (18+)","Families"], referral:"Self-referral", phone:"01509 550317", email:"", website:"https://lwa.org.uk", desc:"Domestic and sexual abuse charity across LLR supporting men, women and children affected by domestic abuse and sexual violence.", lastVerified:"2025-05-01" },
+  { id:34, name:"UAVA – United Against Violence and Abuse", category:"Crisis & Safety", area:"LLR-wide", conditions:["Abuse","Trauma / PTSD"], services:["Domestic abuse support","Sexual violence services","Grooming support"], ageGroups:["Young people (11–17)","Adults (18+)"], referral:"Self-referral", phone:"0808 80 200 28", email:"mailinfo@uava.org.uk", website:"https://www.uava.org.uk", desc:"Co-ordinated domestic, sexual violence and grooming services across LLR for any male or female over 13.", lastVerified:"2025-05-01" },
+  { id:35, name:"Chat Health (School Nursing Text Service)", category:"School-based", area:"LLR-wide", conditions:["Anxiety","Depression","Stress","Low mood"], services:["Confidential text support","Signposting","School nursing advice"], ageGroups:["Young people (11–17)"], referral:"Self-referral", phone:"07520 615 386 (Leicester City) / 07520 615 387 (Leics & Rutland)", email:"", website:"https://www.healthforteens.co.uk/health/about-chathealth", desc:"Confidential text messaging service for 11–19 year olds to contact their local school nursing team. Response within 24hrs, 9am–5pm Mon–Fri.", lastVerified:"2025-05-01" },
+  { id:36, name:"Chat Autism (LLR)", category:"SEND", area:"LLR-wide", conditions:["Neurodiversity","SEND-related anxiety"], services:["Text-based support","Signposting","Parent/carer support"], ageGroups:["Young people (11–17)","Adults (18+)","Families"], referral:"Self-referral", phone:"Text 07312 277097", email:"", website:"https://chathealth.nhs.uk", desc:"Text-based support for autistic people and their families in LLR. Available 9am–5pm every weekday, totally confidential.", lastVerified:"2025-05-01" },
+  { id:37, name:"Leicestershire Autistic Society", category:"SEND", area:"Leicestershire", conditions:["Neurodiversity","SEND-related anxiety"], services:["Information & advice","Support groups","Helpline"], ageGroups:["Children (0–10)","Young people (11–17)","Adults (18+)","Families"], referral:"Self-referral", phone:"0116 291 6958", email:"", website:"https://www.facebook.com/groups/Leicestershireautisticsociety/", desc:"Provides support, information and advice to families and professionals dealing with autism in LLR.", lastVerified:"2025-05-01" },
+  { id:38, name:"Samaritans", category:"Crisis & Safety", area:"National", conditions:["Crisis","Suicide ideation","Depression","Loneliness"], services:["24/7 helpline","Email support"], ageGroups:["All ages"], referral:"Self-referral", phone:"116 123", email:"jo@samaritans.org", website:"https://www.samaritans.org", desc:"Free, confidential support 24/7, 365 days a year for anyone struggling to cope or in crisis.", lastVerified:"2025-05-01" },
+  { id:39, name:"Children & Family Wellbeing Service (LCC)", category:"Family Support", area:"Leicestershire", conditions:["Anxiety","Family stress","Behavioural difficulties","SEND-related anxiety","Abuse"], services:["Early help","Family support","Domestic abuse support","SEND support"], ageGroups:["Children (0–10)","Young people (11–17)","Families"], referral:"Both", phone:"0116 305 8727", email:"", website:"https://www.leicestershire.gov.uk/education-and-children/social-care-and-supporting-families/children-and-family-wellbeing-service", desc:"Provides early help services for children, young people and families experiencing difficulties. Covers domestic abuse, mental health, SEND and parenting.", lastVerified:"2025-05-01" },
+  { id:40, name:"Joy App", category:"Digital Support", area:"LLR-wide", conditions:["Loneliness","Social isolation"], services:["Social activities finder","Community groups","Support discovery"], ageGroups:["Young people (11–17)","Young adults (18–25)","Adults (18+)","Families"], referral:"Self-referral", phone:"", email:"", website:"https://services.thejoyapp.com", desc:"Helps you find social activities, groups and support offers near you. Set your location to find local services for children, families and carers.", lastVerified:"2025-05-01" },
+];
+
+const INITIAL_LOCAL = [];
+const CATEGORIES = ["Mental Health","Community Support","Family Support","Clinical Services","Education & Wellbeing","SEND","Digital Support","Crisis & Safety","School-based","Other"];
+const AGE_GROUP_OPTIONS = ["Children (0–10)","Young people (11–17)","Young adults (18–25)","Adults (18+)","Families","All ages"];
+const REFERRAL_OPTIONS = ["Self-referral","Professional referral","Both"];
+const CONDITION_OPTIONS = ["Anxiety","Depression","Stress","Low mood","Self-harm","Suicide ideation","Eating disorders","OCD","Trauma / PTSD","Psychosis","Bereavement","Loneliness","Behavioural difficulties","Family breakdown","Cultural isolation","Neurodiversity","Learning difficulties","SEND-related anxiety","Substance misuse","Abuse","Other"];
+
+const CAT_COLORS = {
+  "Mental Health":        { bg:"#E6F7EF", text:"#1A6640", border:"#A8DFC0" },
+  "Community Support":    { bg:"#F0EBFF", text:"#5B3FA0", border:"#C8B4F8" },
+  "Family Support":       { bg:"#FFF4E0", text:"#8A5C00", border:"#F9D88A" },
+  "Clinical Services":    { bg:"#FFF0F0", text:"#9B1C1C", border:"#FCA5A5" },
+  "Education & Wellbeing":{ bg:"#ECFDF5", text:"#065F46", border:"#6EE7B7" },
+  "SEND":                 { bg:"#EFF6FF", text:"#1E40AF", border:"#BFDBFE" },
+  "Digital Support":      { bg:"#FDF2F8", text:"#86198F", border:"#F0ABFC" },
+  "Crisis & Safety":      { bg:"#FFF7ED", text:"#9A3412", border:"#FED7AA" },
+  "School-based":         { bg:"#F8FAFC", text:"#334155", border:"#CBD5E1" },
+  "Other":                { bg:"#F8FAFC", text:"#334155", border:"#CBD5E1" },
+};
+const REFERRAL_COLORS = {
+  "Self-referral":        { bg:"#ECFDF5", text:"#065F46", border:"#6EE7B7" },
+  "Professional referral":{ bg:"#FFF0F0", text:"#9B1C1C", border:"#FCA5A5" },
+  "Both":                 { bg:"#FFF4E0", text:"#8A5C00", border:"#F9D88A" },
+};
+
+const BLANK = { name:"", category:"Mental Health", area:"", conditions:[], services:[], ageGroups:[], referral:"Self-referral", phone:"", email:"", website:"", desc:"" };
+
+const PRE_QUESTIONS = [
+  { id:"age",      q:"How old is the young person?", type:"text", placeholder:"e.g. 14" },
+  { id:"area",     q:"Where are they based?", type:"choice", choices:["Leicester City","Leicestershire","Rutland","Not sure"] },
+  { id:"concern",  q:"What is the main concern?", type:"choice", choices:["Anxiety / worry","Depression / low mood","Self-harm","Eating difficulties","School avoidance","Bereavement","Autism / ADHD / SEND","Family difficulties","Substance misuse","Abuse / domestic violence","Loneliness","Other"] },
+  { id:"who",      q:"Who is seeking support?", type:"choice", choices:["The young person themselves","A parent or carer","A professional (e.g. SENDCO, teacher)","A volunteer"] },
+  { id:"referral", q:"Can a professional referral be made if needed?", type:"choice", choices:["Yes","No — needs to be self-referral only","Not sure"] },
+];
+
+function buildSystemPrompt(llr, local, context) {
+  const all = [...llr.map(r=>({...r,_source:"LLR Shared Directory"})), ...local.filter(r=>r.status==="verified").map(r=>({...r,_source:"Local Organisation Directory"}))];
+  const ctx = context ? `\n\nCONTEXT ALREADY GATHERED:\n${Object.entries(context).map(([k,v])=>`- ${k}: ${v}`).join("\n")}\n\nUse this context to make targeted, relevant recommendations immediately. Do not re-ask these questions.` : "";
+  return `You are a compassionate, warm, and knowledgeable wellbeing support navigator for volunteers and SENDCOs in Leicestershire, UK.${ctx}
+
+You are NOT a clinical tool. Never use words like "diagnose", "treat", or "symptoms". Focus on "resilience", "wellbeing support", "early help", and "signposting".
+
+Recommend 1–3 resources from the list below that best fit the situation. Consider conditions, services, age groups, area, and referral type. Always explain WHY you are recommending each one. Note whether a professional referral is required. End by reminding the user that for clinical concerns, a GP or CAMHS referral may be appropriate.
+
+AVAILABLE RESOURCES:
+${all.map(r=>`- ${r.name} [${r._source}] (${r.category}, ${r.area}): ${r.desc}. Conditions: ${(r.conditions||[]).join(", ")}. Services: ${(Array.isArray(r.services)?r.services:[r.services]).join(", ")}. Age groups: ${(r.ageGroups||[]).join(", ")}. Referral: ${r.referral}. Phone: ${r.phone||"N/A"}. Email: ${r.email||"N/A"}. Website: ${r.website}.`).join("\n")}
+
+Keep responses under 250 words. After each recommended resource, include on a new line:
+📞 [phone] · ✉️ [email if available] · 🌐 [website as markdown link]
+Omit unavailable contact types. Write naturally and warmly — no excessive bullet points.`;
+}
+
+function renderMd(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g,"<em>$1</em>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,'<a href="$2" style="color:'+B.green+';text-decoration:underline;" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(?<!href=")(https?:\/\/[^\s<"]+)/g,'<a href="$1" style="color:'+B.green+';text-decoration:underline;" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\n/g,"<br/>");
+}
+
+function isStale(dateStr) {
+  if (!dateStr) return true;
+  const d = new Date(dateStr);
+  const sixMonths = new Date(); sixMonths.setMonth(sixMonths.getMonth()-6);
+  return d < sixMonths;
+}
+
+// ── UI Components ────────────────────────────────────────────────────────────
+function Btn({ children, onClick, variant="primary", size="md", style={} }) {
+  const base = { cursor:"pointer", borderRadius:8, fontWeight:600, border:"none", transition:"all 0.15s", display:"inline-flex", alignItems:"center", gap:6 };
+  const variants = {
+    primary:  { background:B.green, color:B.white, boxShadow:"0 2px 8px rgba(58,184,122,0.3)" },
+    secondary:{ background:B.white, color:B.greenDark, border:`1.5px solid ${B.green}` },
+    amber:    { background:B.amber, color:B.white, boxShadow:"0 2px 8px rgba(244,168,48,0.3)" },
+    ghost:    { background:"transparent", color:B.grey600, border:`1px solid ${B.grey200}` },
+    danger:   { background:B.redLight, color:B.red, border:`1px solid #FCA5A5` },
+  };
+  const sizes = { sm:{ fontSize:12, padding:"5px 12px" }, md:{ fontSize:14, padding:"8px 18px" }, lg:{ fontSize:15, padding:"11px 24px" } };
+  return <button onClick={onClick} style={{...base,...variants[variant],...sizes[size],...style}}>{children}</button>;
+}
+
+function Badge({ label, colors }) {
+  return <span style={{ fontSize:11, padding:"3px 10px", borderRadius:20, background:colors?.bg||B.grey100, color:colors?.text||B.grey600, border:`1px solid ${colors?.border||B.grey200}`, fontWeight:600, whiteSpace:"nowrap" }}>{label}</span>;
+}
+
+function Pill({ label }) {
+  return <span style={{ fontSize:11, padding:"2px 10px", borderRadius:20, background:B.greenLight, color:B.greenDark, border:`1px solid ${B.greenMid}` }}>{label}</span>;
+}
+
+function Tag({ label }) {
+  return <span style={{ fontSize:11, padding:"2px 8px", borderRadius:6, background:B.grey100, color:B.grey600 }}>{label}</span>;
+}
+
+function BetaBanner() {
+  return (
+    <div style={{ background:"#FFF4E0", border:`1.5px solid #F9D88A`, borderRadius:10, padding:"10px 14px", marginBottom:"1rem", display:"flex", alignItems:"flex-start", gap:10, fontSize:13, color:"#8A5C00", lineHeight:1.5 }}>
+      <span style={{ fontSize:16, flexShrink:0 }}>🔧</span>
+      <span>
+        <strong>Beta notice:</strong> Ratings and local resources added here are saved to this browser only and will be lost if browser data is cleared.
+        Cross-device sync and shared organisation data are <strong>coming soon</strong>.
+      </span>
+    </div>
+  );
+}
+
+function ResourceCard({ r, rating, onRate, isLocal, adminMode, onVerify, onFlag }) {
+  const [expanded, setExpanded] = React.useState(false);
+  const avg = rating?.count ? (rating.total/rating.count).toFixed(1) : null;
+  const stale = isStale(r.lastVerified);
+  return (
+    <div style={{ background:B.white, border:`1.5px solid ${isLocal?"#BFDBFE":B.grey200}`, borderRadius:12, padding:"1rem 1.25rem", boxShadow:"0 1px 4px rgba(0,0,0,0.05)" }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:8 }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:4 }}>
+            <span style={{ fontWeight:700, fontSize:15, color:B.grey800 }}>{r.name}</span>
+            {isLocal && r.status==="pending" && <Badge label="⏳ Pending review" colors={{ bg:"#FFF4E0", text:"#8A5C00", border:"#F9D88A" }} />}
+            {isLocal && r.status==="verified" && <Badge label="✓ Verified" colors={{ bg:"#ECFDF5", text:"#065F46", border:"#6EE7B7" }} />}
+            {isLocal && r.status==="flagged" && <Badge label="⚠ Flagged" colors={{ bg:"#FFF0F0", text:"#9B1C1C", border:"#FCA5A5" }} />}
+            {adminMode && stale && <Badge label="⏰ Needs review" colors={{ bg:"#FFF4E0", text:"#8A5C00", border:"#F9D88A" }} />}
+          </div>
+          <span style={{ fontSize:12, color:B.grey600 }}>{r.area}</span>
+          {adminMode && r.lastVerified && <span style={{ fontSize:11, color:B.grey400, marginLeft:8 }}>Last verified: {r.lastVerified}</span>}
+        </div>
+        <div style={{ display:"flex", gap:6, flexShrink:0, flexWrap:"wrap", justifyContent:"flex-end" }}>
+          <Badge label={r.category} colors={CAT_COLORS[r.category]} />
+          <Badge label={r.referral} colors={REFERRAL_COLORS[r.referral]} />
+        </div>
+      </div>
+
+      <p style={{ margin:"0 0 10px", fontSize:13, color:B.grey600, lineHeight:1.6 }}>{r.desc}</p>
+
+      {expanded && (
+        <div style={{ marginBottom:12, display:"grid", gap:10 }}>
+          {r.conditions?.length>0 && <div><p style={{ margin:"0 0 6px", fontSize:11, color:B.grey400, fontWeight:700, letterSpacing:1 }}>CONDITIONS SUPPORTED</p><div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{r.conditions.map(c=><Pill key={c} label={c}/>)}</div></div>}
+          {r.services?.length>0 && <div><p style={{ margin:"0 0 6px", fontSize:11, color:B.grey400, fontWeight:700, letterSpacing:1 }}>SERVICES PROVIDED</p><div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{(Array.isArray(r.services)?r.services:[r.services]).map(s=><Tag key={s} label={s}/>)}</div></div>}
+          {r.ageGroups?.length>0 && <div><p style={{ margin:"0 0 6px", fontSize:11, color:B.grey400, fontWeight:700, letterSpacing:1 }}>AGE GROUPS</p><div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{r.ageGroups.map(a=><Tag key={a} label={a}/>)}</div></div>}
+        </div>
+      )}
+
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
+        <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+          {r.phone && <span style={{ fontSize:12, color:B.grey600 }}>📞 {r.phone}</span>}
+          {r.email && <span style={{ fontSize:12, color:B.grey600 }}>✉️ {r.email}</span>}
+          {r.website && <a href={r.website} style={{ fontSize:12, color:B.green, fontWeight:600 }} target="_blank" rel="noopener noreferrer">Visit website →</a>}
+          <button onClick={()=>setExpanded(e=>!e)} style={{ fontSize:12, background:"none", border:"none", color:B.grey400, cursor:"pointer", padding:0, textDecoration:"underline" }}>{expanded?"Show less":"Show more"}</button>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {avg && <span style={{ fontSize:12, color:B.grey400 }}>{avg} ⭐ ({rating.count})</span>}
+          <div style={{ display:"flex", gap:2 }}>
+            {[1,2,3,4,5].map(n=>(
+              <span key={n} onClick={()=>onRate(n)} style={{ fontSize:16, cursor:"pointer", color:n<=(rating?.count?Math.round(rating.total/rating.count):0)?B.amber:B.grey200 }}>★</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {adminMode && isLocal && (
+        <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${B.grey100}`, display:"flex", gap:8 }}>
+          {r.status!=="verified" && <Btn size="sm" variant="primary" onClick={()=>onVerify(r.id)}>✓ Verify</Btn>}
+          {r.status!=="flagged" && <Btn size="sm" variant="danger" onClick={()=>onFlag(r.id)}>⚠ Flag</Btn>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResourceForm({ onSave, onCancel, title, subtitle }) {
+  const [form, setForm] = React.useState(BLANK);
+  const [errors, setErrors] = React.useState({});
+  const [svcInput, setSvcInput] = React.useState("");
+  function validate() {
+    const e={};
+    if(!form.name.trim()) e.name="Required";
+    if(!form.area.trim()) e.area="Required";
+    if(!form.desc.trim()) e.desc="Required";
+    if(!form.website.trim()) e.website="Required";
+    return e;
+  }
+  function toggle(key,val){ setForm(f=>({...f,[key]:f[key].includes(val)?f[key].filter(x=>x!==val):[...f[key],val]})); }
+  function addSvc(){ if(!svcInput.trim())return; setForm(f=>({...f,services:[...f.services,svcInput.trim()]})); setSvcInput(""); }
+  function handleSave(){ const e=validate(); if(Object.keys(e).length){setErrors(e);return;} onSave({...form}); }
+  const inp=(label,key,ph,req)=>(
+    <div style={{ marginBottom:12 }}>
+      <label style={{ display:"block", fontSize:12, color:B.grey600, marginBottom:4, fontWeight:600 }}>{label}{req&&<span style={{color:B.red}}> *</span>}</label>
+      <input value={form[key]} onChange={e=>{setForm(f=>({...f,[key]:e.target.value}));setErrors(er=>({...er,[key]:null}));}} placeholder={ph} style={{ width:"100%", fontSize:13, padding:"8px 12px", borderRadius:8, border:`1.5px solid ${errors[key]?B.red:B.grey200}`, boxSizing:"border-box", outline:"none" }} />
+      {errors[key]&&<p style={{ margin:"3px 0 0", fontSize:12, color:B.red }}>{errors[key]}</p>}
+    </div>
+  );
+  return (
+    <div style={{ background:B.white, border:`1.5px solid ${B.grey200}`, borderRadius:12, padding:"1.25rem", marginBottom:"1rem", boxShadow:"0 2px 8px rgba(0,0,0,0.06)" }}>
+      <p style={{ margin:"0 0 4px", fontWeight:700, fontSize:15, color:B.grey800 }}>{title}</p>
+      {subtitle&&<p style={{ margin:"0 0 1rem", fontSize:13, color:B.grey600 }}>{subtitle}</p>}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px" }}>{inp("Name","name","e.g. LLR Mind",true)}{inp("Area","area","e.g. Leicester City",true)}</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px", marginBottom:12 }}>
+        <div><label style={{ display:"block", fontSize:12, color:B.grey600, marginBottom:4, fontWeight:600 }}>Category</label><select value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} style={{ width:"100%", fontSize:13, padding:"8px 12px", borderRadius:8, border:`1.5px solid ${B.grey200}` }}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></div>
+        <div><label style={{ display:"block", fontSize:12, color:B.grey600, marginBottom:4, fontWeight:600 }}>Referral type</label><select value={form.referral} onChange={e=>setForm(f=>({...f,referral:e.target.value}))} style={{ width:"100%", fontSize:13, padding:"8px 12px", borderRadius:8, border:`1.5px solid ${B.grey200}` }}>{REFERRAL_OPTIONS.map(r=><option key={r}>{r}</option>)}</select></div>
+      </div>
+      <div style={{ marginBottom:12 }}><label style={{ display:"block", fontSize:12, color:B.grey600, marginBottom:6, fontWeight:600 }}>Conditions supported</label><div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{CONDITION_OPTIONS.map(c=><button key={c} onClick={()=>toggle("conditions",c)} style={{ fontSize:12, padding:"4px 10px", borderRadius:20, border:`1.5px solid ${form.conditions.includes(c)?B.green:B.grey200}`, cursor:"pointer", background:form.conditions.includes(c)?B.greenLight:B.white, color:form.conditions.includes(c)?B.greenDark:B.grey600, fontWeight:form.conditions.includes(c)?600:400 }}>{c}</button>)}</div></div>
+      <div style={{ marginBottom:12 }}><label style={{ display:"block", fontSize:12, color:B.grey600, marginBottom:4, fontWeight:600 }}>Services provided</label><div style={{ display:"flex", gap:8, marginBottom:6 }}><input value={svcInput} onChange={e=>setSvcInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSvc()} placeholder="e.g. Counselling" style={{ flex:1, fontSize:13, padding:"8px 12px", borderRadius:8, border:`1.5px solid ${B.grey200}` }}/><Btn size="sm" variant="secondary" onClick={addSvc}>+ Add</Btn></div><div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>{form.services.map(s=><span key={s} style={{ fontSize:12, padding:"3px 10px", borderRadius:20, background:B.greenLight, color:B.greenDark, display:"flex", alignItems:"center", gap:4 }}>{s}<span onClick={()=>setForm(f=>({...f,services:f.services.filter(x=>x!==s)}))} style={{ cursor:"pointer", opacity:0.6 }}>×</span></span>)}</div></div>
+      <div style={{ marginBottom:12 }}><label style={{ display:"block", fontSize:12, color:B.grey600, marginBottom:6, fontWeight:600 }}>Age groups</label><div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{AGE_GROUP_OPTIONS.map(a=><button key={a} onClick={()=>toggle("ageGroups",a)} style={{ fontSize:12, padding:"4px 10px", borderRadius:20, border:`1.5px solid ${form.ageGroups.includes(a)?B.amber:B.grey200}`, cursor:"pointer", background:form.ageGroups.includes(a)?B.amberLight:B.white, color:form.ageGroups.includes(a)?"#8A5C00":B.grey600, fontWeight:form.ageGroups.includes(a)?600:400 }}>{a}</button>)}</div></div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:"0 16px" }}>{inp("Phone","phone","e.g. 0116 000 0000")}{inp("Email","email","e.g. help@org.org")}{inp("Website","website","https://...",true)}</div>
+      {inp("Description","desc","Brief description of what the organisation does",true)}
+      <div style={{ display:"flex", gap:8 }}><Btn onClick={handleSave} variant="primary">Save resource</Btn><Btn onClick={onCancel} variant="ghost">Cancel</Btn></div>
+    </div>
+  );
+}
+
+// ── Main App ─────────────────────────────────────────────────────────────────
+function App() {
+  const [llrRes] = React.useState(INITIAL_LLR);
+  const [localRes, setLocalRes] = React.useState(INITIAL_LOCAL);
+  const [ratings, setRatings] = React.useState({});
+  const [messages, setMessages] = React.useState([]);
+  const [preCtx, setPreCtx] = React.useState(null);
+  const [preStep, setPreStep] = React.useState(0);
+  const [preAnswers, setPreAnswers] = React.useState({});
+  const [preInput, setPreInput] = React.useState("");
+  const [input, setInput] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [view, setView] = React.useState("chat");
+  const [dirTab, setDirTab] = React.useState("llr");
+  const [showForm, setShowForm] = React.useState(false);
+  const [showRecForm, setShowRecForm] = React.useState(false);
+  const [recSubmitted, setRecSubmitted] = React.useState(false);
+  const [recForm, setRecForm] = React.useState(BLANK);
+  const [searchQ, setSearchQ] = React.useState("");
+  const [filterCat, setFilterCat] = React.useState("All");
+  const [filterAge, setFilterAge] = React.useState("All");
+  const [filterRef, setFilterRef] = React.useState("All");
+  const [adminMode, setAdminMode] = React.useState(false);
+  const [adminPin, setAdminPin] = React.useState("");
+  const [showAdminPrompt, setShowAdminPrompt] = React.useState(false);
+  const [importPreview, setImportPreview] = React.useState(null);
+  const bottomRef = React.useRef(null);
+  const fileRef = React.useRef(null);
+
+  const ADMIN_PIN = "sot2025";
+
+  React.useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[messages,loading]);
+
+  React.useEffect(()=>{
+    try {
+      const r = storage.get("resource-ratings");
+      if(r) setRatings(JSON.parse(r.value));
+    } catch {}
+    try {
+      const l = storage.get("local-resources");
+      if(l) setLocalRes(JSON.parse(l.value));
+    } catch {}
+  },[]);
+
+  function saveRating(id, stars){
+    const updated={...ratings,[id]:{ count:((ratings[id]?.count)||0)+1, total:((ratings[id]?.total)||0)+stars }};
+    setRatings(updated);
+    storage.set("resource-ratings", JSON.stringify(updated));
+  }
+
+  function saveLocalRes(res){
+    storage.set("local-resources", JSON.stringify(res));
+  }
+
+  function addLocalResource(r){
+    const updated=[...localRes,{...r,id:`local-${Date.now()}`,status:"pending",lastVerified:new Date().toISOString().split("T")[0]}];
+    setLocalRes(updated); saveLocalRes(updated); setShowForm(false);
+  }
+
+  function removeLocal(id){
+    const updated=localRes.filter(r=>r.id!==id);
+    setLocalRes(updated); saveLocalRes(updated);
+  }
+
+  function updateLocalStatus(id, status){
+    const updated=localRes.map(r=>r.id===id?{...r,status,lastVerified:status==="verified"?new Date().toISOString().split("T")[0]:r.lastVerified}:r);
+    setLocalRes(updated); saveLocalRes(updated);
+  }
+
+  function startChat(){
+    setPreStep(0); setPreAnswers({}); setPreInput(""); setPreCtx(null); setMessages([]);
+  }
+
+  function handlePreAnswer(val){
+    const q = PRE_QUESTIONS[preStep];
+    const updated = {...preAnswers, [q.id]: val };
+    setPreAnswers(updated);
+    if(preStep < PRE_QUESTIONS.length-1){
+      setPreStep(s=>s+1);
+      setPreInput("");
+    } else {
+      const labels = {
+        "Age of young person": updated.age,
+        "Location": updated.area,
+        "Main concern": updated.concern,
+        "Who is seeking support": updated.who,
+        "Professional referral available": updated.referral,
+      };
+      setPreCtx(labels);
+      setPreStep(-1);
+    }
+  }
+
+  async function send(text){
+    const userMsg = text||input.trim();
+    if(!userMsg) return;
+    setInput("");
+    const updated=[...messages,{role:"user",content:userMsg}];
+    setMessages(updated); setLoading(true);
+    try{
+      const res=await fetch(FIREBASE_FUNCTION_URL, {
+        method:"POST",
+        headers:{ "Content-Type":"application/json", "x-proxy-secret": PROXY_SECRET },
+        body:JSON.stringify({ system: buildSystemPrompt(llrRes,localRes,preCtx), messages: updated }),
+      });
+      const data=await res.json();
+      const reply=data.content?.map(b=>b.text||"").join("")||"Sorry, I couldn't get a response.";
+      setMessages([...updated,{role:"assistant",content:reply}]);
+    }catch(err){
+      setMessages([...updated,{role:"assistant",content:"Something went wrong. Please try again."}]);
+    }
+    setLoading(false);
+  }
+
+  function downloadTemplate(){
+    const headers=["Name","Area","Category","Referral","Conditions","Services","Age Groups","Phone","Email","Website","Description"];
+    const example=["Example Service","Leicester City","Mental Health","Self-referral","Anxiety,Depression","Counselling,Group therapy","Young people (11–17),Adults (18+)","0116 000 0000","info@example.org","https://example.org","Brief description here"];
+    const csv=[headers,example].map(r=>r.map(v=>`"${v}"`).join(",")).join("\n");
+    const blob=new Blob([csv],{type:"text/csv"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a"); a.href=url; a.download="LLR_Directory_Template.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleFileUpload(e){
+    const file=e.target.files[0]; if(!file) return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const text=ev.target.result;
+      const lines=text.split("\n").filter(Boolean);
+      if(lines.length<2){ alert("File appears empty."); return; }
+      const headers=lines[0].split(",").map(h=>h.replace(/"/g,"").trim());
+      const rows=lines.slice(1).map(line=>{
+        const vals=line.match(/(".*?"|[^,]+)/g)||[];
+        const obj={};
+        headers.forEach((h,i)=>{ obj[h]=(vals[i]||"").replace(/"/g,"").trim(); });
+        return obj;
+      }).filter(r=>r.Name);
+      const parsed=rows.map(r=>({
+        name:r.Name||"", area:r.Area||"", category:r.Category||"Mental Health",
+        referral:r.Referral||"Self-referral",
+        conditions:r.Conditions?r.Conditions.split(",").map(s=>s.trim()):[],
+        services:r.Services?r.Services.split(",").map(s=>s.trim()):[],
+        ageGroups:r["Age Groups"]?r["Age Groups"].split(",").map(s=>s.trim()):[],
+        phone:r.Phone||"", email:r.Email||"", website:r.Website||"", desc:r.Description||"",
+        status:"pending", lastVerified:new Date().toISOString().split("T")[0],
+      }));
+      setImportPreview(parsed);
+    };
+    reader.readAsText(file);
+    e.target.value="";
+  }
+
+  function confirmImport(){
+    const updated=[...localRes,...importPreview.map((r,i)=>({...r,id:`local-import-${Date.now()}-${i}`}))];
+    setLocalRes(updated); saveLocalRes(updated); setImportPreview(null);
+  }
+
+  const filtered=(tab)=>{
+    const src=tab==="llr"?llrRes:localRes;
+    return src.filter(r=>{
+      const q=searchQ.toLowerCase();
+      const matchQ=!q||r.name.toLowerCase().includes(q)||r.desc.toLowerCase().includes(q)||(r.conditions||[]).some(c=>c.toLowerCase().includes(q));
+      const matchCat=filterCat==="All"||r.category===filterCat;
+      const matchAge=filterAge==="All"||(r.ageGroups||[]).includes(filterAge);
+      const matchRef=filterRef==="All"||r.referral===filterRef;
+      return matchQ&&matchCat&&matchAge&&matchRef;
+    });
+  };
+
+  const navItems=[{id:"chat",label:"💬 Chat"},{id:"directory",label:"📋 Directory"},{id:"library",label:"🔍 Browse"},{id:"insights",label:"📊 Insights"}];
+  const currentPreQ = preStep >= 0 && preStep < PRE_QUESTIONS.length ? PRE_QUESTIONS[preStep] : null;
+  const chatReady = preCtx !== null;
+
+  return (
+    <div style={{ fontFamily:"-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth:760, margin:"0 auto", padding:"0.75rem 1rem 2rem" }}>
+
+      {/* Header */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"1.25rem", padding:"1rem 1.25rem", background:`linear-gradient(135deg, ${B.greenDark} 0%, ${B.green} 100%)`, borderRadius:16, color:B.white, boxShadow:"0 4px 16px rgba(58,184,122,0.3)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ width:44, height:44, background:"rgba(255,255,255,0.15)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+            <svg viewBox="0 0 100 100" width="32" height="32" fill="none">
+              <ellipse cx="50" cy="38" rx="28" ry="26" fill="rgba(255,255,255,0.9)"/>
+              <rect x="46" y="60" width="8" height="22" rx="4" fill="rgba(255,255,255,0.9)"/>
+              <circle cx="35" cy="58" r="5" fill="rgba(255,255,255,0.7)"/>
+              <path d="M30 58 Q25 53 31 49" stroke="rgba(255,255,255,0.7)" strokeWidth="2" fill="none"/>
+            </svg>
+          </div>
+          <div>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <p style={{ margin:0, fontSize:18, fontWeight:800, letterSpacing:-0.3 }}>LLR Support Navigator</p>
+              <span style={{ fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:20, background:"rgba(255,255,255,0.25)", color:B.white, letterSpacing:1, textTransform:"uppercase" }}>Beta</span>
+            </div>
+            <p style={{ margin:0, fontSize:12, opacity:0.85 }}>Shapes of Tomorrow · Leicestershire</p>
+          </div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          {!adminMode&&<button onClick={()=>setShowAdminPrompt(true)} style={{ fontSize:11, padding:"4px 10px", borderRadius:20, background:"rgba(255,255,255,0.15)", border:"1px solid rgba(255,255,255,0.3)", color:B.white, cursor:"pointer" }}>Admin</button>}
+          {adminMode&&<span style={{ fontSize:11, padding:"4px 10px", borderRadius:20, background:B.amber, color:B.white, fontWeight:700 }}>Admin Mode</span>}
+        </div>
+      </div>
+
+      {/* Admin pin prompt */}
+      {showAdminPrompt&&(
+        <div style={{ background:B.white, border:`1.5px solid ${B.grey200}`, borderRadius:12, padding:"1rem", marginBottom:"1rem", boxShadow:"0 2px 8px rgba(0,0,0,0.08)" }}>
+          <p style={{ margin:"0 0 8px", fontSize:14, fontWeight:600, color:B.grey800 }}>Enter admin PIN</p>
+          <div style={{ display:"flex", gap:8 }}>
+            <input type="password" value={adminPin} onChange={e=>setAdminPin(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter"){ if(adminPin===ADMIN_PIN){setAdminMode(true);setShowAdminPrompt(false);setAdminPin("");}else{alert("Incorrect PIN");} }}} placeholder="PIN" style={{ width:120, fontSize:14, padding:"8px 12px", borderRadius:8, border:`1.5px solid ${B.grey200}` }}/>
+            <Btn variant="primary" size="sm" onClick={()=>{ if(adminPin===ADMIN_PIN){setAdminMode(true);setShowAdminPrompt(false);setAdminPin("");}else{alert("Incorrect PIN");} }}>Enter</Btn>
+            <Btn variant="ghost" size="sm" onClick={()=>{setShowAdminPrompt(false);setAdminPin("");}}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Nav */}
+      <div style={{ display:"flex", gap:6, marginBottom:"1.25rem", background:B.grey50, padding:4, borderRadius:12 }}>
+        {navItems.map(n=>(
+          <button key={n.id} onClick={()=>setView(n.id)} style={{ flex:1, fontSize:13, padding:"8px 4px", borderRadius:10, border:"none", cursor:"pointer", fontWeight:view===n.id?700:500, background:view===n.id?B.white:B.grey50, color:view===n.id?B.greenDark:B.grey600, boxShadow:view===n.id?"0 1px 4px rgba(0,0,0,0.1)":"none", transition:"all 0.15s" }}>{n.label}</button>
+        ))}
+      </div>
+
+      {/* ── CHAT ── */}
+      {view==="chat"&&(
+        <div>
+          {!chatReady&&currentPreQ!==null&&(
+            <div>
+              <div style={{ display:"flex", gap:4, marginBottom:"1rem" }}>
+                {PRE_QUESTIONS.map((_,i)=><div key={i} style={{ flex:1, height:4, borderRadius:4, background:i<=preStep?B.green:B.grey200, transition:"background 0.3s" }}/>)}
+              </div>
+              <div style={{ background:B.white, border:`1.5px solid ${B.grey200}`, borderRadius:16, padding:"1.5rem", textAlign:"center", boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+                <p style={{ margin:"0 0 6px", fontSize:12, color:B.grey400, fontWeight:600, textTransform:"uppercase", letterSpacing:1 }}>Question {preStep+1} of {PRE_QUESTIONS.length}</p>
+                <p style={{ margin:"0 0 1.25rem", fontSize:17, fontWeight:700, color:B.grey800 }}>{currentPreQ.q}</p>
+                {currentPreQ.type==="choice"&&(
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:8, justifyContent:"center" }}>
+                    {currentPreQ.choices.map(c=>(
+                      <button key={c} onClick={()=>handlePreAnswer(c)} style={{ fontSize:13, padding:"10px 18px", borderRadius:24, border:`2px solid ${B.grey200}`, background:B.white, color:B.grey700, cursor:"pointer", fontWeight:500, transition:"all 0.15s" }}
+                        onMouseEnter={e=>{e.target.style.borderColor=B.green;e.target.style.background=B.greenLight;e.target.style.color=B.greenDark;}}
+                        onMouseLeave={e=>{e.target.style.borderColor=B.grey200;e.target.style.background=B.white;e.target.style.color=B.grey700;}}>{c}</button>
+                    ))}
+                  </div>
+                )}
+                {currentPreQ.type==="text"&&(
+                  <div style={{ display:"flex", gap:8, justifyContent:"center" }}>
+                    <input value={preInput} onChange={e=>setPreInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&preInput.trim()&&handlePreAnswer(preInput.trim())} placeholder={currentPreQ.placeholder} style={{ fontSize:14, padding:"10px 16px", borderRadius:10, border:`1.5px solid ${B.grey200}`, width:180, textAlign:"center" }}/>
+                    <Btn variant="primary" onClick={()=>preInput.trim()&&handlePreAnswer(preInput.trim())}>Next →</Btn>
+                  </div>
+                )}
+              </div>
+              <p style={{ textAlign:"center", marginTop:"1rem" }}><button onClick={()=>{setPreCtx({});setPreStep(-1);}} style={{ fontSize:12, color:B.grey400, background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>Skip and go straight to chat</button></p>
+            </div>
+          )}
+
+          {chatReady&&(
+            <div>
+              {preCtx&&Object.keys(preCtx).length>0&&(
+                <div style={{ background:B.greenLight, border:`1.5px solid ${B.greenMid}`, borderRadius:12, padding:"0.75rem 1rem", marginBottom:"0.75rem", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12 }}>
+                  <div>
+                    <p style={{ margin:"0 0 4px", fontSize:12, fontWeight:700, color:B.greenDark, textTransform:"uppercase", letterSpacing:1 }}>Session context</p>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                      {Object.entries(preCtx).map(([k,v])=><span key={k} style={{ fontSize:12, background:B.white, color:B.greenDark, border:`1px solid ${B.greenMid}`, borderRadius:20, padding:"2px 10px" }}>{k}: <strong>{v}</strong></span>)}
+                    </div>
+                  </div>
+                  <button onClick={startChat} style={{ fontSize:12, background:"none", border:"none", cursor:"pointer", color:B.grey400, whiteSpace:"nowrap", textDecoration:"underline" }}>New chat</button>
+                </div>
+              )}
+
+              <div style={{ minHeight:300, maxHeight:420, overflowY:"auto", border:`1.5px solid ${B.grey200}`, borderRadius:12, padding:"1rem", marginBottom:"0.75rem", background:B.white }}>
+                {messages.length===0&&(
+                  <div style={{ textAlign:"center", padding:"1.5rem 0" }}>
+                    <div style={{ fontSize:36, marginBottom:8 }}>🌱</div>
+                    <p style={{ fontSize:15, color:B.grey600, margin:"0 0 1rem", fontWeight:500 }}>Ready to help find the right support.</p>
+                    <p style={{ fontSize:13, color:B.grey400, margin:"0 0 1rem" }}>Describe the situation and I'll suggest the most relevant local resources.</p>
+                  </div>
+                )}
+                {messages.map((m,i)=>(
+                  <div key={i} style={{ marginBottom:"1rem", display:"flex", flexDirection:m.role==="user"?"row-reverse":"row", gap:8 }}>
+                    {m.role==="assistant"&&<div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,${B.greenDark},${B.green})`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, fontSize:12 }}>🌿</div>}
+                    <div style={{ maxWidth:"82%", fontSize:14, lineHeight:1.7, padding:"10px 14px", borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px", background:m.role==="user"?`linear-gradient(135deg,${B.greenDark},${B.green})`:B.grey50, color:m.role==="user"?B.white:B.grey800, boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }} dangerouslySetInnerHTML={{__html:renderMd(m.content)}}/>
+                  </div>
+                ))}
+                {loading&&<div style={{ display:"flex", gap:8, alignItems:"center" }}><div style={{ width:28, height:28, borderRadius:"50%", background:`linear-gradient(135deg,${B.greenDark},${B.green})`, display="flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>🌿</div><div style={{ padding:"10px 14px", borderRadius:12, background:B.grey50, color:B.grey400, fontSize:14 }}>Finding the right support…</div></div>}
+                <div ref={bottomRef}/>
+              </div>
+
+              <div style={{ display:"flex", gap:8 }}>
+                <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Describe the situation…" style={{ flex:1, fontSize:14, padding:"11px 16px", borderRadius:10, border:`1.5px solid ${B.grey200}`, outline:"none", background:B.white }}/>
+                <Btn variant="primary" onClick={()=>send()}>Send</Btn>
+                {messages.length>0&&<Btn variant="ghost" onClick={startChat}>Clear</Btn>}
+              </div>
+              <p style={{ fontSize:11, color:B.grey400, marginTop:"0.75rem", lineHeight:1.5 }}>⚠️ This tool is a wellbeing signposting aid, not a clinical service. For urgent concerns, contact emergency services or a GP.</p>
+            </div>
+          )}
+
+          {!chatReady&&currentPreQ===null&&preStep!==(-2)&&(
+            <div style={{ textAlign:"center", padding:"2rem" }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>🌱</div>
+              <p style={{ fontSize:16, fontWeight:700, color:B.grey800, margin:"0 0 8px" }}>Welcome to the LLR Support Navigator</p>
+              <p style={{ fontSize:14, color:B.grey600, margin:"0 0 1.5rem" }}>We'll ask a few quick questions first to help us find the best match.</p>
+              <Btn variant="primary" size="lg" onClick={startChat}>Get started</Btn>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── DIRECTORY ── */}
+      {view==="directory"&&(
+        <div>
+          <BetaBanner />
+
+          <div style={{ background:B.white, border:`1.5px solid ${B.grey200}`, borderRadius:12, padding:"0.75rem 1rem", marginBottom:"1rem", display:"flex", flexWrap:"wrap", gap:8, alignItems:"center" }}>
+            <input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="🔍 Search by name, condition…" style={{ flex:1, minWidth:180, fontSize:13, padding:"7px 12px", borderRadius:8, border:`1.5px solid ${B.grey200}`, outline:"none" }}/>
+            <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{ fontSize:13, padding:"7px 10px", borderRadius:8, border:`1.5px solid ${B.grey200}` }}><option value="All">All categories</option>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select>
+            <select value={filterAge} onChange={e=>setFilterAge(e.target.value)} style={{ fontSize:13, padding:"7px 10px", borderRadius:8, border:`1.5px solid ${B.grey200}` }}><option value="All">All ages</option>{AGE_GROUP_OPTIONS.map(a=><option key={a}>{a}</option>)}</select>
+            <select value={filterRef} onChange={e=>setFilterRef(e.target.value)} style={{ fontSize:13, padding:"7px 10px", borderRadius:8, border:`1.5px solid ${B.grey200}` }}><option value="All">Any referral</option>{REFERRAL_OPTIONS.map(r=><option key={r}>{r}</option>)}</select>
+          </div>
+
+          <div style={{ display:"flex", gap:6, marginBottom:"1rem", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ display:"flex", gap:6 }}>
+              <button onClick={()=>setDirTab("llr")} style={{ fontSize:13, padding:"8px 18px", borderRadius:10, border:`2px solid ${dirTab==="llr"?B.green:B.grey200}`, cursor:"pointer", fontWeight:dirTab==="llr"?700:500, background:dirTab==="llr"?B.greenLight:B.white, color:dirTab==="llr"?B.greenDark:B.grey600 }}>🌍 LLR Shared ({filtered("llr").length})</button>
+              <button onClick={()=>setDirTab("local")} style={{ fontSize:13, padding:"8px 18px", borderRadius:10, border:`2px solid ${dirTab==="local"?B.amber:B.grey200}`, cursor:"pointer", fontWeight:dirTab==="local"?700:500, background:dirTab==="local"?B.amberLight:B.white, color:dirTab==="local"?B.amber:B.grey600 }}>🏫 Local ({filtered("local").length})</button>
+            </div>
+            <div style={{ display:"flex", gap:6 }}>
+              {dirTab==="llr"&&<Btn variant="secondary" size="sm" onClick={()=>{setShowRecForm(f=>!f);setRecSubmitted(false);setRecForm(BLANK);}}>+ Recommend</Btn>}
+              {dirTab==="local"&&<><Btn variant="ghost" size="sm" onClick={downloadTemplate}>⬇ Template</Btn><Btn variant="ghost" size="sm" onClick={()=>fileRef.current?.click()}>⬆ Import CSV</Btn><Btn variant="amber" size="sm" onClick={()=>setShowForm(f=>!f)}>+ Add resource</Btn><input ref={fileRef} type="file" accept=".csv" style={{display:"none"}} onChange={handleFileUpload}/></>}
+            </div>
+          </div>
+
+          {importPreview&&(
+            <div style={{ background:B.amberLight, border:`1.5px solid ${B.amber}`, borderRadius:12, padding:"1rem", marginBottom:"1rem" }}>
+              <p style={{ margin:"0 0 8px", fontWeight:700, fontSize:14, color:"#8A5C00" }}>Preview: {importPreview.length} resources to import</p>
+              <div style={{ maxHeight:160, overflowY:"auto", marginBottom:10 }}>
+                {importPreview.map((r,i)=><div key={i} style={{ fontSize:12, padding:"4px 0", borderBottom:`1px solid ${B.grey200}`, color:B.grey800 }}><strong>{r.name}</strong> — {r.area} · {r.category}</div>)}
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <Btn variant="amber" size="sm" onClick={confirmImport}>Confirm import</Btn>
+                <Btn variant="ghost" size="sm" onClick={()=>setImportPreview(null)}>Cancel</Btn>
+              </div>
+            </div>
+          )}
+
+          {dirTab==="llr"&&showRecForm&&!recSubmitted&&<ResourceForm title="Recommend a resource" subtitle="Suggest a resource for the Shapes of Tomorrow team to review." onSave={r=>{setRecForm(r);setRecSubmitted(true);}} onCancel={()=>setShowRecForm(false)}/>}
+          {dirTab==="llr"&&showRecForm&&recSubmitted&&(
+            <div style={{ background:B.greenLight, border:`1.5px solid ${B.greenMid}`, borderRadius:12, padding:"1rem", marginBottom:"1rem" }}>
+              <p style={{ margin:"0 0 4px", fontWeight:700, fontSize:14, color:B.greenDark }}>✓ Thanks for your recommendation!</p>
+              <p style={{ margin:"0 0 10px", fontSize:13, color:B.greenDark }}>Please email the details below to <strong>shapesoftomorrow@gmail.com</strong> for review.</p>
+              <div style={{ background:B.white, borderRadius:8, padding:"0.75rem", fontSize:13, lineHeight:1.8, color:B.grey800 }}>
+                <p style={{margin:0}}><strong>Name:</strong> {recForm.name} · <strong>Area:</strong> {recForm.area}</p>
+                <p style={{margin:0}}><strong>Category:</strong> {recForm.category} · <strong>Referral:</strong> {recForm.referral}</p>
+                <p style={{margin:0}}><strong>Phone:</strong> {recForm.phone||"N/A"} · <strong>Email:</strong> {recForm.email||"N/A"} · <strong>Website:</strong> {recForm.website}</p>
+                <p style={{margin:0}}><strong>Conditions:</strong> {recForm.conditions?.join(", ")||"N/A"}</p>
+                <p style={{margin:0}}><strong>Services:</strong> {recForm.services?.join(", ")||"N/A"}</p>
+                <p style={{margin:0}}><strong>Age groups:</strong> {recForm.ageGroups?.join(", ")||"N/A"}</p>
+                <p style={{margin:0}}><strong>Description:</strong> {recForm.desc}</p>
+              </div>
+              <div style={{marginTop:10}}><Btn variant="secondary" size="sm" onClick={()=>{setShowRecForm(false);setRecSubmitted(false);}}>Done</Btn></div>
+            </div>
+          )}
+
+          {dirTab==="local"&&showForm&&<ResourceForm title="Add local resource" subtitle="This will be visible to your organisation and used by the AI navigator." onSave={addLocalResource} onCancel={()=>setShowForm(false)}/>}
+
+          <div style={{ display:"grid", gap:10 }}>
+            {dirTab==="llr"&&filtered("llr").map(r=>(
+              <ResourceCard key={r.id} r={r} rating={ratings[r.id]} onRate={s=>saveRating(r.id,s)} isLocal={false} adminMode={adminMode}/>
+            ))}
+            {dirTab==="local"&&filtered("local").length===0&&!showForm&&!importPreview&&(
+              <div style={{ textAlign:"center", padding:"2.5rem", color:B.grey400, background:B.grey50, borderRadius:12, border:`1.5px dashed ${B.grey200}` }}>
+                <p style={{margin:"0 0 4px",fontSize:15}}>🏫 No local resources yet</p>
+                <p style={{margin:0,fontSize:13}}>Add organisation-specific contacts or import from a spreadsheet.</p>
+              </div>
+            )}
+            {dirTab==="local"&&filtered("local").map(r=>(
+              <div key={r.id} style={{ position:"relative" }}>
+                <ResourceCard r={r} rating={ratings[r.id]} onRate={s=>saveRating(r.id,s)} isLocal={true} adminMode={adminMode} onVerify={id=>updateLocalStatus(id,"verified")} onFlag={id=>updateLocalStatus(id,"flagged")}/>
+                {adminMode&&<button onClick={()=>removeLocal(r.id)} style={{ position:"absolute", top:12, right:12, background:B.redLight, border:`1px solid #FCA5A5`, color:B.red, borderRadius:6, cursor:"pointer", fontSize:12, padding:"3px 8px" }}>Remove</button>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── LIBRARY ── */}
+      {view==="library"&&(
+        <div>
+          <p style={{ fontSize:14, color:B.grey600, marginTop:0 }}>Browse all resources by condition. No AI — just a direct view of what's available in LLR.</p>
+          {CONDITION_OPTIONS.map(cond=>{
+            const matches=[...llrRes,...localRes.filter(r=>r.status==="verified")].filter(r=>(r.conditions||[]).includes(cond));
+            if(!matches.length) return null;
+            return (
+              <div key={cond} style={{ marginBottom:"1.5rem" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                  <h3 style={{ margin:0, fontSize:15, fontWeight:700, color:B.grey800 }}>{cond}</h3>
+                  <span style={{ fontSize:12, background:B.greenLight, color:B.greenDark, borderRadius:20, padding:"2px 10px", fontWeight:600 }}>{matches.length} service{matches.length!==1?"s":""}</span>
+                </div>
+                <div style={{ display:"grid", gap:8 }}>
+                  {matches.map(r=>(
+                    <div key={r.id} style={{ background:B.white, border:`1.5px solid ${B.grey200}`, borderRadius:10, padding:"0.75rem 1rem", display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+                      <div>
+                        <p style={{ margin:"0 0 2px", fontWeight:600, fontSize:14, color:B.grey800 }}>{r.name}</p>
+                        <p style={{ margin:0, fontSize:12, color:B.grey500 }}>{r.area} · {r.referral}</p>
+                      </div>
+                      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                        <Badge label={r.category} colors={CAT_COLORS[r.category]}/>
+                        {r.phone&&<span style={{fontSize:12,color:B.grey600}}>📞 {r.phone}</span>}
+                        {r.website&&<a href={r.website} style={{fontSize:12,color:B.green,fontWeight:600}} target="_blank" rel="noopener noreferrer">Visit →</a>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── INSIGHTS ── */}
+      {view==="insights"&&(
+        <div>
+          <BetaBanner />
+          <p style={{ fontSize:14, color:B.grey600, marginTop:0 }}>Ratings saved on this device. Cross-device aggregation coming soon.</p>
+          {Object.keys(ratings).length===0?(
+            <div style={{ textAlign:"center", padding:"2.5rem", background:B.grey50, borderRadius:12, border:`1.5px dashed ${B.grey200}`, color:B.grey400 }}>
+              <p style={{margin:0,fontSize:15}}>📊 No ratings yet</p>
+              <p style={{margin:"4px 0 0",fontSize:13}}>Ratings from directory cards will appear here.</p>
+            </div>
+          ):(
+            <div style={{ display:"grid", gap:10 }}>
+              {Object.entries(ratings).map(([id,r])=>{
+                const res=[...llrRes,...localRes].find(x=>String(x.id)===id);
+                if(!res) return null;
+                const avg=r.count?r.total/r.count:0;
+                return (
+                  <div key={id} style={{ background:B.white, border:`1.5px solid ${B.grey200}`, borderRadius:12, padding:"0.75rem 1.1rem", display:"flex", alignItems:"center", gap:12 }}>
+                    <div style={{ flex:1 }}>
+                      <p style={{ margin:0, fontSize:14, fontWeight:600, color:B.grey800 }}>{res.name}</p>
+                      <p style={{ margin:0, fontSize:12, color:B.grey400 }}>{r.count} rating{r.count!==1?"s":""}</p>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      {[1,2,3,4,5].map(n=><span key={n} style={{ fontSize:18, color:n<=Math.round(avg)?B.amber:B.grey200 }}>★</span>)}
+                      <span style={{ fontSize:15, fontWeight:700, color:B.grey800, minWidth:28 }}>{avg.toFixed(1)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
